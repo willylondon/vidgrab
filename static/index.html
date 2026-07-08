@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VidGrab</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0a0a0a;
+    color: #e0e0e0;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .logo {
+    text-align: center;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #fff;
+  }
+  .logo span { color: #6c5ce7; }
+
+  .platforms {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .platforms span {
+    font-size: 12px;
+    color: #555;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #1a1a1a;
+    transition: all 0.2s;
+  }
+  .platforms span.active {
+    color: #888;
+    border-color: #333;
+  }
+
+  .input-group {
+    display: flex;
+    gap: 8px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 12px;
+    padding: 4px;
+    transition: border-color 0.2s;
+  }
+  .input-group:focus-within {
+    border-color: #6c5ce7;
+  }
+  .input-group input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 14px;
+    padding: 12px 12px;
+    min-width: 0;
+  }
+  .input-group input::placeholder {
+    color: #444;
+  }
+  .input-group button {
+    background: #6c5ce7;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .input-group button:hover {
+    background: #5a4bd1;
+  }
+  .input-group button:disabled {
+    background: #222;
+    color: #555;
+    cursor: not-allowed;
+  }
+
+  .result {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .result.show { display: flex; }
+
+  .video-card {
+    background: #111;
+    border: 1px solid #1a1a1a;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .video-card .thumb {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #0d0d0d;
+    object-fit: cover;
+    display: block;
+  }
+  .video-card .meta {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .video-card .meta .title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .video-card .meta .info {
+    font-size: 12px;
+    color: #555;
+  }
+
+  .download-btn {
+    width: 100%;
+    background: #6c5ce7;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .download-btn:hover {
+    background: #5a4bd1;
+  }
+  .download-btn:disabled {
+    background: #222;
+    color: #555;
+    cursor: not-allowed;
+  }
+
+  .status {
+    text-align: center;
+    font-size: 13px;
+    color: #555;
+    display: none;
+  }
+  .status.show { display: block; }
+  .status.error { color: #e74c3c; }
+  .status.success { color: #2ecc71; }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #333;
+    border-top-color: #6c5ce7;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer {
+    text-align: center;
+    font-size: 11px;
+    color: #333;
+  }
+  .footer a { color: #555; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="logo">Vid<span>Grab</span></div>
+
+  <div class="platforms" id="platforms">
+    <span data-p="Instagram">Instagram</span>
+    <span data-p="Threads">Threads</span>
+    <span data-p="Twitter">Twitter/X</span>
+    <span data-p="YouTube">YouTube</span>
+    <span data-p="Facebook">Facebook</span>
+    <span data-p="TikTok">TikTok</span>
+  </div>
+
+  <div class="input-group">
+    <input type="url" id="url" placeholder="Paste video link here…" autocomplete="off" autofocus>
+    <button id="fetchBtn" onclick="fetchInfo()">Fetch</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <div class="video-card">
+      <img class="thumb" id="thumb" alt="">
+      <div class="meta">
+        <div class="title" id="title">—</div>
+        <div class="info" id="info">—</div>
+      </div>
+    </div>
+    <button class="download-btn" id="dlBtn" onclick="downloadVideo()">⬇ Download Video</button>
+  </div>
+
+  <div class="footer">
+    Works with YouTube, Instagram, Threads, Twitter/X, Facebook &amp; TikTok
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const urlInput = $('#url');
+const fetchBtn = $('#fetchBtn');
+const dlBtn = $('#dlBtn');
+const statusEl = $('#status');
+const resultEl = $('#result');
+let currentInfo = null;
+
+// Platform detection
+const TIKTOK_RE = /tiktok\.com|vm\.tiktok|vt\.tiktok/;
+
+function isTikTok(url) { return TIKTOK_RE.test(url); }
+
+// Highlight detected platform
+urlInput.addEventListener('input', () => {
+  const val = urlInput.value.toLowerCase();
+  document.querySelectorAll('#platforms span').forEach(span => {
+    const name = span.dataset.p.toLowerCase();
+    span.classList.toggle('active', val.includes(name));
+  });
+});
+
+urlInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') fetchInfo();
+});
+
+async function fetchInfo() {
+  const url = urlInput.value.trim();
+  if (!url) return showStatus('Paste a link first', 'error');
+
+  fetchBtn.disabled = true;
+  resultEl.classList.remove('show');
+  showStatus('<span class="spinner"></span>Fetching video info…', '');
+
+  try {
+    if (isTikTok(url)) {
+      currentInfo = await fetchTikTokInfo(url);
+    } else {
+      const res = await fetch('/api/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to fetch');
+      }
+      currentInfo = await res.json();
+    }
+    renderInfo(currentInfo);
+    hideStatus();
+  } catch (err) {
+    showStatus(err.message, 'error');
+  } finally {
+    fetchBtn.disabled = false;
+  }
+}
+
+// --- TikTok: client-side resolution using browser IP ---
+const TIKTOK_APIS = [
+  {
+    name: 'tikwm',
+    fetch: async (url) => {
+      const r = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+      const d = await r.json();
+      if (d.code !== 0 || !d.data) throw new Error(d.msg || 'Failed');
+      return {
+        title: d.data.title || 'TikTok Video',
+        uploader: d.data.author?.nickname || '',
+        thumbnail: d.data.cover || '',
+        download_url: d.data.play || d.data.hdplay || d.data.wmplay,
+        platform: 'TikTok',
+      };
+    }
+  },
+  {
+    name: 'tikmate',
+    fetch: async (url) => {
+      const r = await fetch(`https://tikmate.cc/api/${encodeURIComponent(url)}`);
+      const d = await r.json();
+      if (!d.success) throw new Error(d.message || 'Failed');
+      return {
+        title: d.title || 'TikTok Video',
+        uploader: d.author || '',
+        thumbnail: d.thumbnail || '',
+        download_url: d.download || d.video,
+        platform: 'TikTok',
+      };
+    }
+  },
+];
+
+async function fetchTikTokInfo(url) {
+  for (const api of TIKTOK_APIS) {
+    try {
+      showStatus(`<span class="spinner"></span>Trying ${api.name}…`, '');
+      const info = await api.fetch(url);
+      return info;
+    } catch (e) {
+      console.log(`${api.name}: ${e.message}`);
+    }
+  }
+  // Final fallback: try server-side (may work from browser CORS)
+  const res = await fetch('/api/tiktok/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (res.ok) {
+    const d = await res.json();
+    return {
+      title: d.title || 'TikTok Video',
+      uploader: d.uploader || '',
+      thumbnail: d.thumbnail || '',
+      platform: 'TikTok',
+      video_url: d.video_url,
+      fallback: true,
+    };
+  }
+  throw new Error('Could not resolve TikTok video. Try a different URL.');
+}
+
+function renderInfo(info) {
+  $('#title').textContent = info.title || 'Untitled';
+  $('#info').textContent = [info.uploader, info.platform, info.duration ? `${Math.floor(info.duration / 60)}:${String(info.duration % 60).padStart(2, '0')}` : '']
+    .filter(Boolean).join(' · ') || '—';
+  if (info.thumbnail) {
+    $('#thumb').src = info.thumbnail;
+    $('#thumb').style.display = '';
+  } else {
+    $('#thumb').style.display = 'none';
+  }
+  resultEl.classList.add('show');
+  dlBtn.disabled = false;
+}
+
+async function downloadVideo() {
+  dlBtn.disabled = true;
+  const url = urlInput.value.trim();
+
+  // TikTok: client-side download directly from CDN
+  if (currentInfo && isTikTok(url)) {
+    return downloadTikTok(url);
+  }
+
+  // Everything else: server-side
+  showStatus('<span class="spinner"></span>Downloading…', '');
+  try {
+    const res = await fetch('/api/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Download failed');
+    }
+    const disposition = res.headers.get('Content-Disposition');
+    let filename = 'video.mp4';
+    if (disposition) {
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      if (match) filename = match[1];
+    }
+    const blob = await res.blob();
+    saveBlob(blob, filename);
+    showStatus('✅ Downloaded!', 'success');
+  } catch (err) {
+    showStatus(err.message, 'error');
+  } finally {
+    dlBtn.disabled = false;
+  }
+}
+
+async function downloadTikTok(url) {
+  showStatus('<span class="spinner"></span>Downloading from TikTok…', '');
+
+  // If we already have a download_url from fetch, use it
+  if (currentInfo.download_url) {
+    try {
+      const blob = await fetchBlob(currentInfo.download_url);
+      saveBlob(blob, (currentInfo.title || 'tiktok') + '.mp4');
+      showStatus('✅ Downloaded!', 'success');
+      dlBtn.disabled = false;
+      return;
+    } catch (e) { console.log('Direct CDN failed:', e.message); }
+  }
+
+  // Re-resolve and try every API for download
+  for (const api of TIKTOK_APIS) {
+    try {
+      showStatus(`<span class="spinner"></span>Trying ${api.name}…`, '');
+      const info = await api.fetch(url);
+      if (info.download_url) {
+        const blob = await fetchBlob(info.download_url);
+        saveBlob(blob, (info.title || 'tiktok') + '.mp4');
+        showStatus('✅ Downloaded!', 'success');
+        dlBtn.disabled = false;
+        return;
+      }
+    } catch (e) { console.log(`${api.name} download:`, e.message); }
+  }
+
+  showStatus('Could not download. TikTok may require login — try from your phone browser.', 'error');
+  dlBtn.disabled = false;
+}
+
+async function fetchBlob(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.blob();
+}
+
+function saveBlob(blob, filename) {
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
+}
+
+function showStatus(msg, cls) {
+  statusEl.innerHTML = msg;
+  statusEl.className = 'status show' + (cls ? ' ' + cls : '');
+}
+function hideStatus() {
+  statusEl.className = 'status';
+  statusEl.innerHTML = '';
+}
+</script>
+</body>
+</html>
