@@ -93,7 +93,8 @@ def _try_cookiesfrombrowser(url: str, opts: dict) -> None:
 
 
 def build_ydl_opts(extra: dict | None = None, url: str = "") -> dict:
-    """Build yt-dlp options. Tries Chrome cookies for platforms that need them."""
+    """Build yt-dlp options. Tries Chrome cookies for Meta platforms, 
+    uses Android client for YouTube to avoid bot detection."""
     opts: dict = {
         "quiet": True,
         "no_warnings": True,
@@ -102,6 +103,10 @@ def build_ydl_opts(extra: dict | None = None, url: str = "") -> dict:
             "User-Agent": BROWSER_UA,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+        },
+        # Android client avoids YouTube's aggressive bot detection
+        "extractor_args": {
+            "youtube": {"player_client": ["android", "web"]},
         },
     }
 
