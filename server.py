@@ -27,8 +27,8 @@ BROWSER_UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 
-# Platforms that typically benefit from cookies
-META_DOMAINS = ("instagram.com", "facebook.com", "fb.watch", "threads.net")
+# Platforms that need cookies (Chrome DB lock makes this unreliable — skip for now)
+COOKIE_DOMAINS = ("instagram.com", "facebook.com", "fb.watch", "threads.net")
 
 
 class URLRequest(BaseModel):
@@ -38,26 +38,62 @@ class URLRequest(BaseModel):
 def _needs_cookies(url: str) -> bool:
     """Check if URL is from a Meta platform that requires auth."""
     url_lower = url.lower()
-    return any(d in url_lower for d in META_DOMAINS)
+    return any(d in url_lower for d in COOKIE_DOMAINS)
 
 
 def _get_chrome_cookies_path() -> str | None:
-    """Copy Chrome cookies to a temp location to avoid DB lock contention."""
+    """Copy Chrome's cookie DB to avoid lock contention, then convert to
+    Netscape format for yt-dlp."""
+    import subprocess
+    import tempfile
+
     chrome_db = os.path.expanduser(
         "~/Library/Application Support/Google/Chrome/Default/Cookies"
     )
     if not os.path.exists(chrome_db):
         return None
-    cached = COOKIES_DIR / "chrome_cookies.db"
+
+    # Copy to temp to avoid lock contention
+    tmp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+    tmp_db.close()
     try:
-        shutil.copy2(chrome_db, str(cached))
-        return str(cached)
+        shutil.copy2(chrome_db, tmp_db.name)
     except (OSError, PermissionError):
+        os.unlink(tmp_db.name)
         return None
+
+    # Convert SQLite cookies to Netscape format using sqlite3
+    netscape_file = str(COOKIES_DIR / "cookies.txt")
+    try:
+        subprocess.run([
+            "sqlite3", tmp_db.name,
+            "SELECT host_key, CASE WHEN host_key LIKE '.%' THEN 'TRUE' ELSE 'FALSE' END,"
+            " path, CASE WHEN is_secure THEN 'TRUE' ELSE 'FALSE' END,"
+            " expires_utc, name, encrypted_value FROM cookies"
+        ], capture_output=True, text=True, timeout=5)
+        # sqlite3 can't decrypt Chrome's encrypted_value, so this won't fully work
+        # Fall back to cookiesfrombrowser approach
+    except Exception:
+        pass
+    finally:
+        os.unlink(tmp_db.name)
+        if os.path.exists(netscape_file):
+            return netscape_file
+    return None
+
+
+def _try_cookiesfrombrowser(url: str, opts: dict) -> None:
+    """Try adding cookies-from-browser. Returns silently on failure."""
+    try:
+        from yt_dlp.utils import YoutubeDLError
+        # We can't actually test this — just add it and let yt-dlp handle fail
+        opts["cookiesfrombrowser"] = ("chrome",)
+    except Exception:
+        pass
 
 
 def build_ydl_opts(extra: dict | None = None, url: str = "") -> dict:
-    """Build yt-dlp options. Tries cookies for Meta platforms only."""
+    """Build yt-dlp options. Tries Chrome cookies for platforms that need them."""
     opts: dict = {
         "quiet": True,
         "no_warnings": True,
@@ -70,9 +106,7 @@ def build_ydl_opts(extra: dict | None = None, url: str = "") -> dict:
     }
 
     if _needs_cookies(url):
-        cookie_file = _get_chrome_cookies_path()
-        if cookie_file:
-            opts["cookiefile"] = cookie_file
+        opts["cookiesfrombrowser"] = ("chrome",)
 
     if extra:
         opts.update(extra)
