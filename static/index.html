@@ -288,6 +288,7 @@ async function fetchInfo() {
 
 // --- TikTok: client-side resolution using browser IP ---
 const TIKTOK_APIS = [
+  // Primary
   {
     name: 'tikwm',
     fetch: async (url) => {
@@ -298,7 +299,26 @@ const TIKTOK_APIS = [
         title: d.data.title || 'TikTok Video',
         uploader: d.data.author?.nickname || '',
         thumbnail: d.data.cover || '',
-        download_url: d.data.play || d.data.hdplay || d.data.wmplay,
+        download_url: d.data.hdplay || d.data.play || d.data.wmplay,
+        platform: 'TikTok',
+      };
+    }
+  },
+  {
+    name: 'tikwm-post',
+    fetch: async (url) => {
+      const r = await fetch('https://www.tikwm.com/api/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `url=${encodeURIComponent(url)}&count=1`
+      });
+      const d = await r.json();
+      if (d.code !== 0 || !d.data) throw new Error(d.msg || 'Failed');
+      return {
+        title: d.data.title || 'TikTok Video',
+        uploader: d.data.author?.nickname || '',
+        thumbnail: d.data.cover || '',
+        download_url: d.data.hdplay || d.data.play || d.data.wmplay,
         platform: 'TikTok',
       };
     }
@@ -314,6 +334,35 @@ const TIKTOK_APIS = [
         uploader: d.author || '',
         thumbnail: d.thumbnail || '',
         download_url: d.download || d.video,
+        platform: 'TikTok',
+      };
+    }
+  },
+  // Fallbacks
+  {
+    name: 'tikcdn',
+    fetch: async (url) => {
+      const r = await fetch(`https://tikcdn.io/api/download?url=${encodeURIComponent(url)}`);
+      const d = await r.json();
+      return {
+        title: d.title || d.original_title || 'TikTok Video',
+        uploader: d.author?.nickname || d.owner?.nickname || '',
+        thumbnail: d.thumbnail || d.cover || '',
+        download_url: d.download || d.video || d.play || d.url,
+        platform: 'TikTok',
+      };
+    }
+  },
+  {
+    name: 'ssstik',
+    fetch: async (url) => {
+      const r = await fetch(`https://ssstik.io/api?url=${encodeURIComponent(url)}`);
+      const d = await r.json();
+      return {
+        title: d.title || 'TikTok Video',
+        uploader: d.author || d.nickname || '',
+        thumbnail: d.cover || d.thumbnail || '',
+        download_url: d.download_url || d.video_link || d.play,
         platform: 'TikTok',
       };
     }
